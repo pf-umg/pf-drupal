@@ -1,0 +1,15 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: drupal
+      MYSQL_USER: drupal
+      MYSQL_PASSWORD: drupal
+      MYSQL_ROOT_PASSWORD: root
+  drupal:
+    build: .
+    image: umg-drupal:lab
+    ports:
+      - "8080:80"
+    depends_on:
+      - db

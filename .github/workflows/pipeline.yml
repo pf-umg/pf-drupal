@@ -1,0 +1,18 @@
+# .github/workflows/pipeline.yml
+# Version 1: la deja Edwar. El siguiente reemplaza este archivo completo por su version.
+name: DevSecOps
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dast:
+    uses: ./.github/workflows/dast.yml

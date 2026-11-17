@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drupal
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: drupal }
+  template:
+    metadata:
+      labels: { app: drupal }
+    spec:
+      containers:
+        - name: drupal
+          image: umg-drupal:lab
+          ports:
+            - containerPort: 80
+          env:
+            - name: DB_PASSWORD
+              value: "drupal"

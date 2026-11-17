@@ -1,0 +1,84 @@
+# .github/workflows/dast.yml  (responsable: Edwar)
+name: DAST y autorizacion
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dast:
+    name: DAST y autorizacion
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar dependencias de Composer
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app \
+            composer:2 install --no-interaction --ignore-platform-reqs -q
+
+      - name: Levantar el sitio
+        run: docker compose up -d --build
+
+      - name: Instalar Drupal (perfil minimal) y el modulo umg_lab
+        run: |
+          for i in $(seq 1 20); do
+            docker compose exec -T drupal vendor/bin/drush site:install minimal \
+              --db-url=mysql://drupal:drupal@db/drupal --account-name=admin \
+              --account-pass="Ci-${{ github.run_id }}-x!" -y && break
+            echo "La base de datos aun no responde, reintento $i"; sleep 6
+          done
+          docker compose exec -T drupal vendor/bin/drush pm:install node jsonapi umg_lab -y
+          docker compose exec -T -u root drupal chown -R www-data:www-data web/sites/default
+          docker compose exec -T drupal vendor/bin/drush cache:rebuild
+          curl -fsS -o /dev/null http://localhost:8080/ && echo "Sitio arriba"
+
+      - name: Puerta 8 - Pruebas de autorizacion
+        run: |
+          fallo=0
+          c=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/lab/borrar/1)
+          echo "GET /lab/borrar/1 como anonimo -> $c"
+          if [ "$c" = "200" ]; then
+            echo "::error::/lab/borrar acepta GET sin autenticacion (HC07)"; fallo=1
+          fi
+          n=$(curl -s http://localhost:8080/jsonapi/user/user \
+              | jq '[.data[]? | select((.attributes.drupal_internal__uid // 0) > 0)] | length')
+          echo "Usuarios que JSON:API muestra a un anonimo -> ${n:-0}"
+          if [ "${n:-0}" -gt 0 ]; then echo "::warning::JSON:API lista usuarios a anonimos (HC14)"; fi
+          if docker compose exec -T drupal vendor/bin/drush pm:list --status=enabled --format=list | grep -qx syslog; then
+            echo "syslog habilitado"
+          else
+            echo "::warning::Los logs quedan solo en dblog (HC24)"
+          fi
+          exit $fallo
+
+      - name: Puerta 9 - DAST con OWASP ZAP (XSS e inyeccion SQL bloquean)
+        if: always()
+        run: |
+          mkdir -p zap && cp .zap/reglas.tsv zap/ && chmod -R 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py -t "http://localhost:8080/lab/buscar?q=prueba" \
+            -c reglas.tsv -I -m 2 -T 15 -r zap-full.html -J zap-full.json
+
+      - name: Informe - ZAP baseline del sitio completo (no bloquea)
+        if: always()
+        run: |
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://localhost:8080 -I -r zap-baseline.html -J zap-baseline.json || true
+
+      - name: Apagar el sitio
+        if: always()
+        run: |
+          docker compose logs drupal > zap/drupal.log 2>&1 || true
+          docker compose down -v
+
+      - name: Guardar reportes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-dast
+          path: zap/

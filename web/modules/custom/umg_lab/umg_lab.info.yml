@@ -1,0 +1,5 @@
+name: UMG Lab
+type: module
+description: 'Modulo del laboratorio con fallas intencionales.'
+core_version_requirement: ^11
+package: UMG

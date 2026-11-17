@@ -1,0 +1,4 @@
+40012	FAIL	(XSS reflejado)
+40014	FAIL	(XSS persistente)
+40018	FAIL	(Inyeccion SQL)
+40019	FAIL	(Inyeccion SQL MySQL)

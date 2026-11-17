@@ -1,0 +1,9 @@
+umg_lab.buscar:
+  path: '/lab/buscar'
+  defaults: { _controller: '\Drupal\umg_lab\Controller\LabController::buscar' }
+  requirements: { _access: 'TRUE' }
+
+umg_lab.borrar:
+  path: '/lab/borrar/{nid}'
+  defaults: { _controller: '\Drupal\umg_lab\Controller\LabController::borrar' }
+  requirements: { _permission: 'access content' }
