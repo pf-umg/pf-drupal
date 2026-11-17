@@ -1,0 +1,64 @@
+# .github/workflows/sast.yml  (responsable: Josue)
+name: Secretos y SAST
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  sast:
+    name: Secretos y SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Puerta 1 - Secretos (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            dir /repo --redact -v --report-format sarif --report-path /repo/gitleaks.sarif
+
+      - name: Puerta 2 - SAST (Semgrep, severidad ERROR bloquea)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep semgrep scan \
+            --config p/php --config p/secrets --config .semgrep/drupal.yml \
+            --severity ERROR --error --sarif --output semgrep.sarif web/modules/custom
+
+      - name: Informe - phpcs con estandares de Drupal (no bloquea)
+        if: always()
+        continue-on-error: true
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app \
+            composer:2 install --no-interaction --ignore-platform-reqs -q
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app --entrypoint php composer:2 \
+            vendor/bin/phpcs --standard=Drupal,DrupalPractice \
+            --report-full --report-checkstyle=phpcs.xml web/modules/custom
+
+      - name: Publicar Semgrep en la pestana Security
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Publicar gitleaks en la pestana Security
+        if: always() && hashFiles('gitleaks.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+      - name: Guardar reportes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-sast
+          path: |
+            gitleaks.sarif
+            semgrep.sarif
+            phpcs.xml

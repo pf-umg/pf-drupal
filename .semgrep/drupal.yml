@@ -1,0 +1,29 @@
+# .semgrep/drupal.yml  (responsable: Josue)
+rules:
+  - id: drupal-sqli-concatenacion
+    languages: [php]
+    severity: ERROR
+    message: "SQL con concatenacion de entrada (T05 / R01). Usar placeholders."
+    pattern: $DB->query($A . $B, ...)
+
+  - id: drupal-accesscheck-false
+    languages: [php]
+    severity: ERROR
+    message: "Entity query sin control de acceso (T13 / R28)."
+    patterns:
+      - pattern: $Q->accessCheck($X)
+      - metavariable-regex:
+          metavariable: $X
+          regex: (?i)^false$
+
+  - id: drupal-markup-create
+    languages: [php]
+    severity: ERROR
+    message: "Markup::create omite el filtrado XSS (T06 / R02)."
+    pattern: Markup::create(...)
+
+  - id: php-unserialize
+    languages: [php]
+    severity: ERROR
+    message: "unserialize() sobre datos externos (T04 / R04). Usar json_decode()."
+    pattern: unserialize(...)
