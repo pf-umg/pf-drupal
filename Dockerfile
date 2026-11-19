@@ -1,7 +1,7 @@
 # Dockerfile endurecido (responsable: Stiven)
 # Opcional: fijar la base por digest (ver paso 4 de la guia)
 FROM drupal:11-php8.3-apache
-
+RUN apt-get update && apt-get upgrade -y && apt-get clean && rm -rf /var/lib/apt/lists/*
 # Apache en el puerto 8080 (un usuario sin privilegios no puede usar el 80)
 # y sin revelar versiones de Apache ni de PHP (HC13)
 RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf \
