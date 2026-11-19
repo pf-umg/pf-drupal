@@ -1,5 +1,5 @@
 # .github/workflows/pipeline.yml
-# Version 2: la deja Josue. El siguiente reemplaza este archivo completo por su version.
+# Version 3: la deja Stiven. El siguiente reemplaza este archivo completo por su version.
 name: DevSecOps
 
 on:
@@ -16,6 +16,9 @@ permissions:
 jobs:
   sast:
     uses: ./.github/workflows/sast.yml
+
+  contenedor-iac:
+    uses: ./.github/workflows/contenedor-iac.yml
 
   dast:
     uses: ./.github/workflows/dast.yml

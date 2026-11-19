@@ -1,0 +1,69 @@
+# .github/workflows/contenedor-iac.yml  (responsable: Stiven)
+name: Contenedor e IaC
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contenedor:
+    name: Contenedor e IaC
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar dependencias de Composer
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app \
+            composer:2 install --no-interaction --ignore-platform-reqs -q
+
+      - name: Construir la imagen (con la base mas reciente)
+        run: docker build --pull -t umg-drupal:ci .
+
+      - name: Puerta 6 - Imagen (Trivy image, criticas con parche)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/src" -w /src \
+            aquasec/trivy:latest image --severity CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-dirs /opt/drupal/web/core/modules/package_manager/tests umg-drupal:ci
+
+      - name: Puerta 7 - Configuracion (Trivy config sobre Dockerfile, Kubernetes y Terraform)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest config \
+            --severity HIGH,CRITICAL --exit-code 1 --skip-dirs vendor --skip-dirs web .
+
+      - name: Informe - Checkov (no bloquea)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src bridgecrew/checkov -d . \
+            --framework kubernetes,terraform,dockerfile --skip-path vendor --skip-path web \
+            --soft-fail --compact > checkov.txt || true
+          tail -n 5 checkov.txt
+
+      - name: Informe - hadolint (no bloquea)
+        if: always()
+        run: docker run --rm -i hadolint/hadolint < Dockerfile | tee hadolint.txt || true
+
+      - name: Informe - reporte completo de la imagen (Trivy y Grype)
+        if: always()
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/src" \
+            aquasec/trivy:latest image --format json -o /src/trivy-imagen.json \
+            --skip-dirs /opt/drupal/web/core/modules/package_manager/tests umg-drupal:ci || true
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/grype:latest umg-drupal:ci --only-fixed -o table > grype-imagen.txt || true
+
+      - name: Guardar reportes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-contenedor-iac
+          path: |
+            checkov.txt
+            hadolint.txt
+            trivy-imagen.json
+            grype-imagen.txt
