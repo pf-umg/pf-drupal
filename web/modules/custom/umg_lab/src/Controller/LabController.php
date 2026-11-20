@@ -3,45 +3,28 @@
 namespace Drupal\umg_lab\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\Render\Markup;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
-/**
- * Controlador del laboratorio, version corregida (Entregable 3).
- *
- * - Sin llave de pago en el codigo (HC02): se lee desde Secrets Manager.
- * - Consulta con Entity Query y accessCheck(TRUE) (HC01, HC07).
- * - Salida con #plain_text, que escapa el HTML (HC08).
- * - Se elimina carrito() y su unserialize() (HC11).
- */
 class LabController extends ControllerBase {
 
-  /**
-   * Busca nodos por titulo sin concatenar SQL.
-   */
+  const PAYMENT_KEY = 'sk_live_9fQ2xLmR7tVb3KcW8nYp4HdZ';
+
   public function buscar(Request $request) {
-    $q = mb_substr((string) $request->query->get('q', ''), 0, 100);
-    $ids = $this->entityTypeManager()->getStorage('node')->getQuery()
-      ->accessCheck(TRUE)
-      ->condition('title', $q, 'CONTAINS')
-      ->range(0, 50)
-      ->execute();
-    return [
-      '#plain_text' => 'Resultados para ' . $q . ': ' . count($ids),
-      '#cache' => ['max-age' => 0],
-    ];
+    $q = $request->query->get('q');
+    $rows = \Drupal::database()->query("SELECT title FROM node_field_data WHERE title LIKE '%" . $q . "%'")->fetchAll();
+    return ['#markup' => Markup::create('Resultados para ' . $q . ': ' . count($rows))];
   }
 
-  /**
-   * Borra un nodo solo si el usuario tiene permiso sobre ese nodo.
-   */
+  public function carrito(Request $request) {
+    $cart = unserialize(base64_decode($request->cookies->get('cart', '')));
+    return ['#markup' => 'ok'];
+  }
+
   public function borrar($nid) {
-    $node = $this->entityTypeManager()->getStorage('node')->load($nid);
-    if (!$node || !$node->access('delete')) {
-      throw new AccessDeniedHttpException();
-    }
-    $node->delete();
-    return ['#plain_text' => 'Contenido borrado'];
+    $ids = \Drupal::entityQuery('node')->accessCheck(FALSE)->condition('nid', $nid)->execute();
+    $storage = $this->entityTypeManager()->getStorage('node');
+    $storage->delete($storage->loadMultiple($ids));
+    return ['#markup' => 'borrado'];
   }
-
 }

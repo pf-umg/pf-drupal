@@ -10,6 +10,6 @@ services:
     build: .
     image: umg-drupal:lab
     ports:
-      - "8080:8080"   # antes era 8080:80
+      - "8080:80"
     depends_on:
       - db

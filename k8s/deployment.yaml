@@ -1,13 +1,7 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: portal
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: drupal
-  namespace: portal
 spec:
   replicas: 2
   selector:
@@ -16,54 +10,11 @@ spec:
     metadata:
       labels: { app: drupal }
     spec:
-      automountServiceAccountToken: false
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 33
-        runAsGroup: 33
-        fsGroup: 33
-        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: drupal
-          image: umg-drupal:lab   # en produccion: registro/umg-drupal@sha256:...
-          imagePullPolicy: Always
+          image: umg-drupal:lab
           ports:
-            - containerPort: 8080
+            - containerPort: 80
           env:
             - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef: { name: drupal-db, key: password }
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: { drop: ["ALL"] }
-          resources:
-            requests: { cpu: 250m, memory: 256Mi }
-            limits: { cpu: "1", memory: 512Mi }
-          livenessProbe:
-            httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 30
-          readinessProbe:
-            httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 10
-          volumeMounts:
-            - { name: tmp, mountPath: /tmp }
-            - { name: apache-run, mountPath: /var/run/apache2 }
-            - { name: apache-lock, mountPath: /var/lock/apache2 }
-      volumes:
-        - { name: tmp, emptyDir: {} }
-        - { name: apache-run, emptyDir: {} }
-        - { name: apache-lock, emptyDir: {} }
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drupal-solo-ingress
-  namespace: portal
-spec:
-  podSelector:
-    matchLabels: { app: drupal }
-  policyTypes: [Ingress]
-  ingress:
-    - ports:
-        - port: 8080
+              value: "drupal"
