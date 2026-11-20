@@ -1,0 +1,49 @@
+# .github/workflows/sca.yml  (responsable: Jairo)
+name: SCA y SBOM
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sca:
+    name: SCA y SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Puerta 3 - Avisos de seguridad de Drupal y Composer (composer audit)
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app composer:2 audit --locked --format=plain
+
+      - name: Puerta 4 - Dependencias vulnerables (Trivy fs, altas y criticas con parche)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest fs \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-dirs web/core/modules/package_manager/tests .
+
+      - name: Generar SBOM (Syft, CycloneDX y SPDX)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" anchore/syft:latest dir:/src \
+            -o cyclonedx-json=/src/sbom.cdx.json -o spdx-json=/src/sbom.spdx.json
+
+      - name: Puerta 5 - Vulnerabilidades criticas en el SBOM (Grype)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" anchore/grype:latest sbom:/src/sbom.cdx.json \
+            --fail-on critical -o table
+
+      - name: Guardar SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            sbom.cdx.json
+            sbom.spdx.json
