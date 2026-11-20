@@ -1,5 +1,5 @@
 # .github/workflows/pipeline.yml
-# Version 4: la deja Jairo. El siguiente reemplaza este archivo completo por su version.
+# Version final: la deja Iris.
 name: DevSecOps
 
 on:
@@ -25,3 +25,28 @@ jobs:
 
   dast:
     uses: ./.github/workflows/dast.yml
+
+  resumen:
+    name: Resumen de puertas
+    needs: [sast, sca, contenedor-iac, dast]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tabla de resultados
+        run: |
+          {
+            echo "## Resultado de las puertas de seguridad"
+            echo ""
+            echo "| Puerta | Herramientas | Resultado |"
+            echo "|---|---|---|"
+            echo "| Secretos y SAST | gitleaks, Semgrep | ${{ needs.sast.result }} |"
+            echo "| SCA y SBOM | composer audit, Trivy fs, Grype | ${{ needs.sca.result }} |"
+            echo "| Contenedor e IaC | Trivy image, Trivy config | ${{ needs.contenedor-iac.result }} |"
+            echo "| DAST y autorizacion | curl, OWASP ZAP | ${{ needs.dast.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Puerta final
+        if: contains(needs.*.result, 'failure')
+        run: |
+          echo "::error::Al menos una puerta de seguridad fallo. No se permite el merge."
+          exit 1
